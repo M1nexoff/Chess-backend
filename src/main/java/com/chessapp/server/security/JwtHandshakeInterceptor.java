@@ -26,14 +26,17 @@ public class JwtHandshakeInterceptor implements HandshakeInterceptor {
     public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response,
                                    WebSocketHandler wsHandler, Map<String, Object> attributes) {
 
-        if (request instanceof ServletServerHttpRequest servletRequest) {
+        if (request instanceof ServletServerHttpRequest) {
+            ServletServerHttpRequest servletRequest = (ServletServerHttpRequest) request;
             String query = servletRequest.getServletRequest().getQueryString();
             if (query != null && query.contains("token=")) {
                 String token = query.split("token=")[1].split("&")[0];
                 if (jwtUtils.validateJwtToken(token)) {
                     String username = jwtUtils.getUserNameFromJwtToken(token);
                     Optional<User> userOpt = userService.findByLogin(username);
-                    userOpt.ifPresent(user -> attributes.put("user", user));
+                    if (userOpt.isPresent()) {
+                        attributes.put("user", userOpt.get());
+                    }
                 }
             }
         }
