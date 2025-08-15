@@ -28,8 +28,7 @@ public class UserController {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             return ResponseEntity.status(401).body(Map.of("error", "Missing or invalid Authorization header"));
         }
-        String token = authHeader.substring(7); // Remove "Bearer "
-        String username = getUsernameFromToken(token);
+        String username = getUsernameFromToken(authHeader);
 
         Optional<User> userOpt = userService.findByLogin(username);
 
@@ -59,8 +58,8 @@ public class UserController {
     }
 
     @GetMapping("/online")
-    public ResponseEntity<?> getOnlineUsers(@RequestHeader("Authorization") String token) {
-        String username = getUsernameFromToken(token);
+    public ResponseEntity<?> getOnlineUsers(@RequestHeader("Authorization") String authHeader) {
+        String username = getUsernameFromToken(authHeader);
         Optional<User> userOpt = userService.findByLogin(username);
 
         if (userOpt.isPresent()) {
