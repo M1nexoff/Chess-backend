@@ -67,22 +67,3 @@ public class JwtHandshakeInterceptor implements HandshakeInterceptor {
     }
 }
 
-
-@Configuration
-@EnableWebSecurity
-class SecurityConfig {
-
-    @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        http
-                .csrf(csrf -> csrf.disable())
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/users/profile").permitAll() // Allow this without auth
-                        .requestMatchers("/api/users/online").permitAll() // Allow this without auth
-                        .anyRequest().authenticated()
-                );
-        return http.build();
-    }
-}
-
-
