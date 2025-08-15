@@ -34,6 +34,9 @@ public class AuthController {
 
             return ResponseEntity.ok(response);
         } catch (IllegalArgumentException e) {
+            if (e.getMessage().contains("exists")) {
+                return ResponseEntity.status(409).body(Map.of("error", e.getMessage()));
+            }
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }
     }
@@ -45,9 +48,9 @@ public class AuthController {
         if (userOpt.isPresent()) {
             User user = userOpt.get();
             String token = jwtUtils.generateToken(user.getLogin());
-
-            // Set user online
-            userService.setUserOnline(user, true);
+//
+//            // Set user online
+//            userService.setUserOnline(user, true);
 
             Map<String, Object> response = new HashMap<>();
             response.put("token", token);

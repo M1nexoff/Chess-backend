@@ -203,14 +203,14 @@ public class GameService {
                 if (game.getIsWhiteTurn()) {
                     // Black just moved
                     if (game.getMoves().size() > 2) { // White and Black each have 1 move (2 total), so after that we start subtracting
-                        int newWhiteTime = game.getWhiteTimeLeft() - elapsed;
-                        game.setWhiteTimeLeft(Math.max(0, newWhiteTime));
+                        int newBlackTime = game.getBlackTimeLeft() - elapsed;
+                        game.setBlackTimeLeft(Math.max(0, newBlackTime));
                     }
                 } else {
                     // White just moved
                     if (game.getMoves().size() > 1) { // First move from white doesn't consume time
-                        int newBlackTime = game.getBlackTimeLeft() - elapsed;
-                        game.setBlackTimeLeft(Math.max(0, newBlackTime));
+                        int newWhiteTime = game.getWhiteTimeLeft() - elapsed;
+                        game.setWhiteTimeLeft(Math.max(0, newWhiteTime));
                     }
                 }
 
