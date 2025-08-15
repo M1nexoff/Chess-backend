@@ -28,7 +28,7 @@ public class UserController {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             return ResponseEntity.status(401).body(Map.of("error", "Missing or invalid Authorization header"));
         }
-        String token = authHeader.substring(7);
+        String token = authHeader.substring(7); // Remove "Bearer "
         String username = getUsernameFromToken(token);
 
         Optional<User> userOpt = userService.findByLogin(username);
@@ -39,6 +39,7 @@ public class UserController {
             return ResponseEntity.notFound().build();
         }
     }
+
 
     @PutMapping("/profile")
     public ResponseEntity<?> updateProfile(@RequestHeader("Authorization") String token,
@@ -92,4 +93,5 @@ public class UserController {
         public String getDisplayName() { return displayName; }
         public void setDisplayName(String displayName) { this.displayName = displayName; }
     }
+
 }
