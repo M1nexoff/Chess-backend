@@ -24,8 +24,13 @@ public class UserController {
     private JwtUtils jwtUtils;
 
     @GetMapping("/profile")
-    public ResponseEntity<?> getProfile(@RequestHeader("Authorization") String token) {
+    public ResponseEntity<?> getProfile(@RequestHeader("Authorization") String authHeader) {
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return ResponseEntity.status(401).body(Map.of("error", "Missing or invalid Authorization header"));
+        }
+        String token = authHeader.substring(7);
         String username = getUsernameFromToken(token);
+
         Optional<User> userOpt = userService.findByLogin(username);
 
         if (userOpt.isPresent()) {
