@@ -7,7 +7,7 @@ import com.chessapp.server.data.model.enums.GameState;
 import com.chessapp.server.data.model.enums.MoveResult;
 import com.chessapp.server.data.model.enums.TimeControl;
 import com.chessapp.server.repository.GameRepository;
-import com.github.bhlangonijr.chesslib.Board;
+import com.github.bhlangonijr.chesslib.*;
 import com.github.bhlangonijr.chesslib.move.Move;
 import com.github.bhlangonijr.chesslib.move.MoveException;
 import jakarta.transaction.Transactional;
@@ -181,17 +181,49 @@ public class GameService {
         }
 
         try {
-            if (moveStr == null || moveStr.length() != 4) {
+            if (moveStr == null || (moveStr.length() != 4 && moveStr.length() != 5)) {
                 System.out.println("Invalid move format: " + moveStr);
                 return MoveResult.INVALID_MOVE;
             }
+
 
             Board board = new Board();
             board.loadFromFen(game.getBoardState());
 
             Move move;
             try {
-                move = new Move(moveStr, board.getSideToMove());
+
+            } catch (Exception e) {
+                System.out.println("Invalid move format: " + e.getMessage());
+                return MoveResult.INVALID_MOVE;
+            }
+
+            try {
+                if (moveStr.length() == 5) {
+                    char promoChar = Character.toUpperCase(moveStr.charAt(4));
+                    PieceType promoType;
+                    switch (promoChar) {
+                        case 'Q': promoType = PieceType.QUEEN; break;
+                        case 'R': promoType = PieceType.ROOK; break;
+                        case 'B': promoType = PieceType.BISHOP; break;
+                        case 'N': promoType = PieceType.KNIGHT; break;
+                        default:
+                            System.out.println("Invalid promotion piece: " + promoChar);
+                            return MoveResult.INVALID_MOVE;
+                    }
+
+                    // Make correct piece for the side to move
+                    Side side = board.getSideToMove();
+                    Piece promotionPiece = Piece.make(side, promoType);
+
+                    move = new Move(
+                            Square.fromValue(moveStr.substring(0, 2)),
+                            Square.fromValue(moveStr.substring(2, 4)),
+                            promotionPiece
+                    );
+                } else {
+                    move = new Move(moveStr, board.getSideToMove());
+                }
             } catch (Exception e) {
                 System.out.println("Invalid move format: " + e.getMessage());
                 return MoveResult.INVALID_MOVE;
