@@ -34,13 +34,13 @@ public class MatchmakingService {
         Optional<Game> activeGame = gameService.findActiveGameByPlayer(user);
         System.out.println("[MM] User " + user.getLogin() + " entering search. Active game present? " + activeGame.isPresent());
 
-        if (activeGame.isPresent()) {
-            // Check if the game is actually in progress
-            Game game = activeGame.get();
-            if (game.getState() == GameState.IN_PROGRESS) {
-                throw new IllegalStateException("User already has an active game");
-            }
-        }
+//        if (activeGame.isPresent()) {
+//            // Check if the game is actually in progress
+//            Game game = activeGame.get();
+//            if (game.getState() == GameState.IN_PROGRESS) {
+//                throw new IllegalStateException("User already has an active game");
+//            }
+//        }
 
         MatchmakingRequest request = new MatchmakingRequest(user, timeControl);
         searchingUsers.put(user.getLogin(), request);

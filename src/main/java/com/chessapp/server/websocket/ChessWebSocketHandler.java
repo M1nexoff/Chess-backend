@@ -454,8 +454,7 @@ Hibernate.initialize(game.getMoves());
                 Optional<Game> gameOpt = gameService.findById(gameId);
                 if (gameOpt.isPresent()) {
                     Game game = gameOpt.get();
-                    sendToUser(game.getWhitePlayer().getLogin(), "gameEnded", gameData);
-                    sendToUser(game.getBlackPlayer().getLogin(), "gameEnded", gameData);
+                    notifyGameEnded(game);
                 }
             }
 
