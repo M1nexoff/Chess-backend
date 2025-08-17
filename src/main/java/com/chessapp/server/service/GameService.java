@@ -200,7 +200,8 @@ public class GameService {
 
             try {
                 if (moveStr.length() == 5) {
-                    char promoChar = Character.toUpperCase(moveStr.charAt(4));
+                    String normalized = moveStr.toUpperCase();
+                    char promoChar = normalized.charAt(4);
                     PieceType promoType;
                     switch (promoChar) {
                         case 'Q': promoType = PieceType.QUEEN; break;
@@ -217,8 +218,8 @@ public class GameService {
                     Piece promotionPiece = Piece.make(side, promoType);
 
                     move = new Move(
-                            Square.fromValue(moveStr.substring(0, 2)),
-                            Square.fromValue(moveStr.substring(2, 4)),
+                            Square.fromValue(normalized.substring(0, 2)),
+                            Square.fromValue(normalized.substring(2, 4)),
                             promotionPiece
                     );
                 } else {
