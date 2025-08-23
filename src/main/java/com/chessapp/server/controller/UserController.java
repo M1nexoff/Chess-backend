@@ -35,6 +35,7 @@ public class UserController {
         if (userOpt.isPresent()) {
             return ResponseEntity.ok(createUserResponse(userOpt.get()));
         } else {
+            System.out.println(username + " " + authHeader);
             return ResponseEntity.notFound().build();
         }
     }
