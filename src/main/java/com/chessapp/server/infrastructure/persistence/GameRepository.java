@@ -3,6 +3,8 @@ package com.chessapp.server.infrastructure.persistence;
 import com.chessapp.server.domain.model.Game;
 import com.chessapp.server.domain.enums.GameState;
 import com.chessapp.server.domain.model.User;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -29,4 +31,7 @@ public interface GameRepository extends JpaRepository<Game, Long> {
     @Query("SELECT g FROM Game g WHERE g.state IN :states")
     List<Game> findByStateIn(@Param("states") List<GameState> states);
 
+    @Query("SELECT g FROM Game g WHERE (g.whitePlayer = :user OR g.blackPlayer = :user) " +
+            "AND g.state = 'ENDED' ORDER BY g.endedAt DESC")
+    Page<Game> findCompletedGamesByPlayer(@Param("user") User user, Pageable pageable);
 }

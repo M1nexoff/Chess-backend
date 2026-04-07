@@ -1,6 +1,8 @@
 package com.chessapp.server.infrastructure.persistence;
 
 import com.chessapp.server.domain.model.User;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -19,4 +21,17 @@ public interface UserRepository extends JpaRepository<User, Long> {
 
     @Query("SELECT u FROM User u WHERE u.isOnline = true AND u.id != :userId")
     List<User> findOnlineUsersExcept(@Param("userId") Long userId);
+
+    @Query("SELECT u FROM User u WHERE LOWER(u.login) LIKE LOWER(CONCAT('%', :query, '%')) " +
+            "OR LOWER(u.displayName) LIKE LOWER(CONCAT('%', :query, '%'))")
+    Page<User> searchByLoginOrDisplayName(@Param("query") String query, Pageable pageable);
+
+    @Query("SELECT u FROM User u ORDER BY u.blitzRating DESC")
+    Page<User> findTopByBlitzRating(Pageable pageable);
+
+    @Query("SELECT u FROM User u ORDER BY u.rapidRating DESC")
+    Page<User> findTopByRapidRating(Pageable pageable);
+
+    @Query("SELECT u FROM User u ORDER BY u.bulletRating DESC")
+    Page<User> findTopByBulletRating(Pageable pageable);
 }

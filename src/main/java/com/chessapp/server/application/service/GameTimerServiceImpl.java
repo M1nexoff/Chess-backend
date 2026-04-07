@@ -1,6 +1,8 @@
 package com.chessapp.server.application.service;
 
 import com.chessapp.server.domain.model.Game;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
@@ -9,6 +11,8 @@ import java.util.concurrent.*;
 
 @Component
 public class GameTimerServiceImpl implements GameTimerService {
+
+    private static final Logger logger = LoggerFactory.getLogger(GameTimerServiceImpl.class);
 
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(10);
     private final Map<Long, ScheduledFuture<?>> timeoutTasks = new ConcurrentHashMap<>();
@@ -27,7 +31,7 @@ public class GameTimerServiceImpl implements GameTimerService {
         if (timeLeft <= 0) {
             Long timedOutPlayerId = game.getCurrentPlayer().getId();
             scheduler.execute(() -> {
-                System.out.println("[Timeout] Triggering immediate timeout for game " + game.getId());
+                logger.info("[Timeout] Triggering immediate timeout for game {}", game.getId());
                 gameService.handleTimeOutAsync(game.getId(), timedOutPlayerId);
             });
             return;
@@ -35,7 +39,7 @@ public class GameTimerServiceImpl implements GameTimerService {
 
         Long timedOutPlayerId = game.getCurrentPlayer().getId(); // Capture correct ID now
         ScheduledFuture<?> task = scheduler.schedule(() -> {
-            System.out.println("[Timeout] Scheduled timeout triggered for game " + game.getId());
+            logger.info("[Timeout] Scheduled timeout triggered for game {}", game.getId());
             gameService.handleTimeOutAsync(game.getId(), timedOutPlayerId); // Use correct player
         }, timeLeft, TimeUnit.MILLISECONDS);
 

@@ -1,5 +1,6 @@
 package com.chessapp.server.application.service;
 
+import com.chessapp.server.application.dto.GameDataDto;
 import com.chessapp.server.domain.model.Game;
 import com.chessapp.server.domain.model.User;
 import com.chessapp.server.domain.enums.GameResult;
@@ -11,7 +12,8 @@ import com.github.bhlangonijr.chesslib.*;
 import com.github.bhlangonijr.chesslib.move.Move;
 import jakarta.transaction.Transactional;
 import org.hibernate.Hibernate;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -23,21 +25,27 @@ import java.util.*;
 
 @Service
 public class GameServiceImpl implements GameService {
-    @Autowired
-    @Lazy
-    private GameNotificationService notificationService;
 
-    @Autowired
-    private GameRepository gameRepository;
+    private static final Logger logger = LoggerFactory.getLogger(GameServiceImpl.class);
 
-    @Autowired
-    private UserService userService;
+    private final GameNotificationService notificationService;
+    private final GameRepository gameRepository;
+    private final UserService userService;
+    private final RatingService ratingService;
+    private final GameTimerService gameTimerService;
 
-    @Autowired
-    private RatingService ratingService;
-
-    @Autowired
-    private GameTimerService gameTimerService;
+    public GameServiceImpl(
+            @Lazy GameNotificationService notificationService,
+            GameRepository gameRepository,
+            UserService userService,
+            RatingService ratingService,
+            GameTimerService gameTimerService) {
+        this.notificationService = notificationService;
+        this.gameRepository = gameRepository;
+        this.userService = userService;
+        this.ratingService = ratingService;
+        this.gameTimerService = gameTimerService;
+    }
 
     @Transactional
     public void endAllUnfinishedGames() {
@@ -54,8 +62,8 @@ public class GameServiceImpl implements GameService {
         Game game = new Game(whitePlayer, blackPlayer, timeControl);
         game.setState(GameState.IN_PROGRESS);
         game.setStartedAt(LocalDateTime.now());
-        System.out.println("Created game between " + whitePlayer.getLogin() + " and " + blackPlayer.getLogin());
-        System.out.println("Game state: " + game.getState());
+        logger.info("Created game between {} and {}", whitePlayer.getLogin(), blackPlayer.getLogin());
+        logger.debug("Game state: {}", game.getState());
 
         return gameRepository.save(game);
     }
@@ -77,22 +85,20 @@ public class GameServiceImpl implements GameService {
     }
 
     @Transactional
-    public Map<String, Object> createGameDataMap(Long gameId) {
+    public GameDataDto createGameData(Long gameId) {
         Optional<Game> gameOpt = findByIdWithMoves(gameId);
-        if (!gameOpt.isPresent()) {
+        if (gameOpt.isEmpty()) {
             return null;
         }
 
         Game game = gameOpt.get();
-        // Initialize the moves collection within the transaction
         Hibernate.initialize(game.getMoves());
 
-        return buildGameDataMap(game);
+        return buildGameData(game);
     }
 
     @Transactional
-    public Map<String, Object> createGameDataMap(Game game) {
-        // If the game is detached, re-attach it to the session
+    public GameDataDto createGameData(Game game) {
         if (game.getId() != null) {
             Optional<Game> managedGame = findByIdWithMoves(game.getId());
             if (managedGame.isPresent()) {
@@ -102,11 +108,10 @@ public class GameServiceImpl implements GameService {
 
         Hibernate.initialize(game.getMoves());
 
-        return buildGameDataMap(game);
+        return buildGameData(game);
     }
 
-    private Map<String, Object> buildGameDataMap(Game game) {
-        Map<String, Object> gameData = new HashMap<>();
+    private GameDataDto buildGameData(Game game) {
         User white = game.getWhitePlayer();
         User black = game.getBlackPlayer();
         TimeControl timeControl = game.getTimeControl();
@@ -114,45 +119,38 @@ public class GameServiceImpl implements GameService {
         int whiteRating = white.getRatingForTimeControl(timeControl);
         int blackRating = black.getRatingForTimeControl(timeControl);
 
-        // Estimate rating deltas using your RatingService
-        int[] whiteDeltas = ratingService.predictRatingChange(whiteRating, blackRating); // [win, draw, loss]
+        int[] whiteDeltas = ratingService.predictRatingChange(whiteRating, blackRating);
         int[] blackDeltas = ratingService.predictRatingChange(blackRating, whiteRating);
 
-        gameData.put("gameId", game.getId());
-
-        gameData.put("whitePlayer", white.getLogin());
-        gameData.put("whiteDisplayName", white.getDisplayName());
-        gameData.put("whiteRating", whiteRating);
-        gameData.put("whiteOpponent", black.getLogin());
-        gameData.put("whiteOpponentDisplayName", black.getDisplayName());
-        gameData.put("whiteOpponentRating", blackRating);
-        gameData.put("whiteWinDelta", whiteDeltas[0]);
-        gameData.put("whiteDrawDelta", whiteDeltas[1]);
-        gameData.put("whiteLossDelta", whiteDeltas[2]);
-
-        gameData.put("blackPlayer", black.getLogin());
-        gameData.put("blackDisplayName", black.getDisplayName());
-        gameData.put("blackRating", blackRating);
-        gameData.put("blackOpponent", white.getLogin());
-        gameData.put("blackOpponentDisplayName", white.getDisplayName());
-        gameData.put("blackOpponentRating", whiteRating);
-        gameData.put("blackWinDelta", blackDeltas[0]);
-        gameData.put("blackDrawDelta", blackDeltas[1]);
-        gameData.put("blackLossDelta", blackDeltas[2]);
-
-        gameData.put("boardState", game.getBoardState());
-        gameData.put("moves", game.getMoves());
-        gameData.put("isWhiteTurn", game.getIsWhiteTurn());
-        gameData.put("timeControl", game.getTimeControl().name());
-        gameData.put("whiteTimeLeft", game.getWhiteTimeLeft());
-        gameData.put("blackTimeLeft", game.getBlackTimeLeft());
-        gameData.put("state", game.getState().name());
-
-        if (game.getResult() != null) {
-            gameData.put("result", game.getResult().name());
-        }
-
-        return gameData;
+        return new GameDataDto(
+                game.getId(),
+                white.getLogin(),
+                white.getDisplayName(),
+                whiteRating,
+                black.getLogin(),
+                black.getDisplayName(),
+                blackRating,
+                whiteDeltas[0],
+                whiteDeltas[1],
+                whiteDeltas[2],
+                black.getLogin(),
+                black.getDisplayName(),
+                blackRating,
+                white.getLogin(),
+                white.getDisplayName(),
+                whiteRating,
+                blackDeltas[0],
+                blackDeltas[1],
+                blackDeltas[2],
+                game.getBoardState(),
+                new ArrayList<>(game.getMoves()),
+                game.getIsWhiteTurn(),
+                game.getTimeControl().name(),
+                game.getWhiteTimeLeft(),
+                game.getBlackTimeLeft(),
+                game.getState().name(),
+                game.getResult() != null ? game.getResult().name() : null
+        );
     }
 
     @Transactional
@@ -196,7 +194,7 @@ public class GameServiceImpl implements GameService {
             return MoveResult.SUCCESS;
 
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.error("Error processing move for game {}: {}", gameId, e.getMessage(), e);
             return MoveResult.ERROR;
         }
     }
@@ -238,13 +236,14 @@ public class GameServiceImpl implements GameService {
 
     private void updatePlayerClocks(Game game) {
         int elapsed = (int) calculateElapsedTime(game);
+        // Subtract elapsed time from the CURRENT player's clock (the one making the move)
         if (game.getIsWhiteTurn()) {
-            if (game.getMoves().size() > 2) {
-                game.setBlackTimeLeft(Math.max(0, game.getBlackTimeLeft() - elapsed));
+            if (game.getMoves().size() >= 2) {
+                game.setWhiteTimeLeft(Math.max(0, game.getWhiteTimeLeft() - elapsed));
             }
         } else {
-            if (game.getMoves().size() > 1) {
-                game.setWhiteTimeLeft(Math.max(0, game.getWhiteTimeLeft() - elapsed));
+            if (game.getMoves().size() >= 1) {
+                game.setBlackTimeLeft(Math.max(0, game.getBlackTimeLeft() - elapsed));
             }
         }
     }
@@ -271,7 +270,7 @@ public class GameServiceImpl implements GameService {
     @Transactional
     public void endGame(Game game, GameResult result) {
         gameTimerService.cancelTimeout(game.getId());
-        System.out.println("Ending game: " + game.getId() + ", reason = " + result);
+        logger.info("Ending game: {}, reason = {}", game.getId(), result);
         game.setState(GameState.ENDED);
         game.setResult(result);
         game.setEndedAt(LocalDateTime.now());
@@ -307,7 +306,7 @@ public class GameServiceImpl implements GameService {
                 || result == GameResult.BLACK_WIN_RESIGNATION) {
             blackPlayer.incrementWins(timeControl);
             whitePlayer.incrementLosses(timeControl);
-        } else if (result == GameResult.DRAW) {
+        } else if (result == GameResult.DRAW || result == GameResult.DRAW_BY_AGREEMENT) {
             whitePlayer.incrementDraws(timeControl);
             blackPlayer.incrementDraws(timeControl);
         }
@@ -344,7 +343,7 @@ public class GameServiceImpl implements GameService {
     public void handleTimeOut(Long gameId, Long playerId) {
         Optional<Game> gameOpt = gameRepository.findById(gameId);
         if (gameOpt.isEmpty()) {
-            System.out.println("[Timeout] Game not found: " + gameId);
+            logger.warn("[Timeout] Game not found: {}", gameId);
             return;
         }
 
@@ -352,24 +351,24 @@ public class GameServiceImpl implements GameService {
         Hibernate.initialize(game.getMoves());
 
         if (game.getState() != GameState.IN_PROGRESS) {
-            System.out.println("[Timeout] Game not in progress: " + gameId);
+            logger.warn("[Timeout] Game not in progress: {}", gameId);
             return;
         }
 
         if (!game.isPlayerInGameById(playerId)) {
-            System.out.println("[Timeout] Player not in game: " + playerId);
+            logger.warn("[Timeout] Player not in game: {}", playerId);
             return;
         }
 
         if (!game.getCurrentPlayer().getId().equals(playerId)) {
-            System.out.println("[Timeout] Skipped — player's turn passed: " + playerId);
+            logger.debug("[Timeout] Skipped — player's turn passed: {}", playerId);
             return;
         }
 
         GameResult result = playerId.equals(game.getWhitePlayer().getId()) ? GameResult.BLACK_WIN_TIMEOUT
                 : GameResult.WHITE_WIN_TIMEOUT;
 
-        System.out.println("[Timeout] Ending game " + gameId + " due to timeout. Player: " + playerId);
+        logger.info("[Timeout] Ending game {} due to timeout. Player: {}", gameId, playerId);
         endGame(game, result);
 
         notificationService.notifyGameEnded(game);
@@ -381,4 +380,66 @@ public class GameServiceImpl implements GameService {
         handleTimeOut(gameId, playerId); // call the same logic
     }
 
-}
+    // --- Draw Offer Management ---
+    // Maps gameId -> the login of the player who offered the draw
+    private final Map<Long, String> pendingDrawOffers = new java.util.concurrent.ConcurrentHashMap<>();
+
+    @Override
+    @Transactional
+    public boolean offerDraw(Long gameId, User player) {
+        Optional<Game> gameOpt = gameRepository.findById(gameId);
+        if (gameOpt.isEmpty()) return false;
+
+        Game game = gameOpt.get();
+        if (game.getState() != GameState.IN_PROGRESS || !game.isPlayerInGame(player)) {
+            return false;
+        }
+
+        // Cannot offer draw if there's already a pending offer from this player
+        String existingOffer = pendingDrawOffers.get(gameId);
+        if (existingOffer != null && existingOffer.equals(player.getLogin())) {
+            return false;
+        }
+
+        pendingDrawOffers.put(gameId, player.getLogin());
+        logger.info("Draw offered in game {} by {}", gameId, player.getLogin());
+        return true;
+    }
+
+    @Override
+    @Transactional
+    public boolean acceptDraw(Long gameId, User player) {
+        Optional<Game> gameOpt = gameRepository.findById(gameId);
+        if (gameOpt.isEmpty()) return false;
+
+        Game game = gameOpt.get();
+        if (game.getState() != GameState.IN_PROGRESS || !game.isPlayerInGame(player)) {
+            return false;
+        }
+
+        String offerer = pendingDrawOffers.get(gameId);
+        // Only the opponent of the offerer can accept
+        if (offerer == null || offerer.equals(player.getLogin())) {
+            return false;
+        }
+
+        pendingDrawOffers.remove(gameId);
+        Hibernate.initialize(game.getMoves());
+        endGame(game, GameResult.DRAW_BY_AGREEMENT);
+        logger.info("Draw accepted in game {} by {}", gameId, player.getLogin());
+        return true;
+    }
+
+    @Override
+    public boolean declineDraw(Long gameId, User player) {
+        String offerer = pendingDrawOffers.get(gameId);
+        if (offerer == null || offerer.equals(player.getLogin())) {
+            return false;
+        }
+
+        pendingDrawOffers.remove(gameId);
+        logger.info("Draw declined in game {} by {}", gameId, player.getLogin());
+        return true;
+    }
+
+}

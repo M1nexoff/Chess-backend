@@ -1,5 +1,6 @@
 package com.chessapp.server.application.service;
 
+import com.chessapp.server.application.dto.GameDataDto;
 import com.chessapp.server.domain.model.Game;
 import com.chessapp.server.domain.model.User;
 import com.chessapp.server.domain.enums.GameResult;
@@ -7,7 +8,6 @@ import com.chessapp.server.domain.enums.MoveResult;
 import com.chessapp.server.domain.enums.TimeControl;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 public interface GameService {
@@ -23,9 +23,9 @@ public interface GameService {
 
     List<Game> findGamesByPlayer(User user);
 
-    Map<String, Object> createGameDataMap(Long gameId);
+    GameDataDto createGameData(Long gameId);
 
-    Map<String, Object> createGameDataMap(Game game);
+    GameDataDto createGameData(Game game);
 
     MoveResult makeMove(Long gameId, User player, String moveStr);
 
@@ -36,4 +36,10 @@ public interface GameService {
     void handleTimeOut(Long gameId, Long playerId);
 
     void handleTimeOutAsync(Long gameId, Long playerId);
+
+    boolean offerDraw(Long gameId, User player);
+
+    boolean acceptDraw(Long gameId, User player);
+
+    boolean declineDraw(Long gameId, User player);
 }

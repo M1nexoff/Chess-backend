@@ -1,5 +1,6 @@
 package com.chessapp.server.presentation.websocket;
 
+import com.chessapp.server.application.dto.GameDataDto;
 import com.chessapp.server.domain.model.User;
 import com.chessapp.server.domain.model.Game;
 import com.chessapp.server.domain.model.Challenge;
@@ -42,6 +43,9 @@ public class ChessWebSocketHandler implements WebSocketHandler, GameNotification
     private GameTimerService gameTimerService;
 
     @Autowired
+    private FriendService friendService;
+
+    @Autowired
     private JwtUtils jwtUtils;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -74,6 +78,9 @@ public class ChessWebSocketHandler implements WebSocketHandler, GameNotification
 
                 // Send pending challenges
                 sendPendingChallenges(user);
+
+                // Notify friends that user came online
+                broadcastFriendPresence(user, true);
             });
         } else {
             session.close();
@@ -117,6 +124,15 @@ public class ChessWebSocketHandler implements WebSocketHandler, GameNotification
                 case "resign":
                     handleResign(user, messageData);
                     break;
+                case "offerDraw":
+                    handleOfferDraw(user, messageData);
+                    break;
+                case "acceptDraw":
+                    handleAcceptDraw(user, messageData);
+                    break;
+                case "declineDraw":
+                    handleDeclineDraw(user, messageData);
+                    break;
                 case "chat":
                     handleChat(user, messageData);
                     break;
@@ -151,6 +167,9 @@ public class ChessWebSocketHandler implements WebSocketHandler, GameNotification
 
             // Cancel any active searches
             matchmakingService.exitSearchMode(user);
+
+            // Notify friends that user went offline
+            broadcastFriendPresence(user, false);
         }
     }
 
@@ -265,7 +284,7 @@ public class ChessWebSocketHandler implements WebSocketHandler, GameNotification
             }
 
             Game game = challengeService.acceptChallenge(challengeId, user);
-            Map<String, Object> gameData = gameService.createGameDataMap(game);
+            GameDataDto gameData = gameService.createGameData(game);
 
             sendToUser(game.getWhitePlayer().getLogin(), "gameStarted", gameData);
             sendToUser(game.getBlackPlayer().getLogin(), "gameStarted", gameData);
@@ -349,7 +368,7 @@ public class ChessWebSocketHandler implements WebSocketHandler, GameNotification
 
                 if (opponent != null) {
                     // Use the service method to create game data safely
-                    Map<String, Object> gameData = gameService.createGameDataMap(game);
+                    GameDataDto gameData = gameService.createGameData(game);
                     sendToUser(user.getLogin(), "gameStarted", gameData);
                     sendToUser(opponent.getLogin(), "gameStarted", gameData);
                 }
@@ -369,14 +388,14 @@ public class ChessWebSocketHandler implements WebSocketHandler, GameNotification
         }
     }
 
-    private void sendToUser(String username, String type, Map<String, Object> data) {
+    private void sendToUser(String username, String type, Object data) {
         WebSocketSession session = userSessions.get(username);
         if (session != null && session.isOpen()) {
             sendMessage(session, type, data);
         }
     }
 
-    private void sendMessage(WebSocketSession session, String type, Map<String, Object> data) {
+    private void sendMessage(WebSocketSession session, String type, Object data) {
         try {
             Map<String, Object> message = new HashMap<>();
             message.put("type", type);
@@ -410,7 +429,7 @@ public class ChessWebSocketHandler implements WebSocketHandler, GameNotification
             MoveResult result = gameService.makeMove(gameId, user, move);
 
             if (result == MoveResult.SUCCESS || result == MoveResult.GAME_ENDED) {
-                Map<String, Object> gameData = gameService.createGameDataMap(gameId);
+                GameDataDto gameData = gameService.createGameData(gameId);
                 if (gameData != null) {
                     Optional<Game> gameOpt = gameService.findById(gameId);
                     if (gameOpt.isPresent()) {
@@ -440,7 +459,7 @@ public class ChessWebSocketHandler implements WebSocketHandler, GameNotification
             gameService.resignGame(gameId, user);
 
             // Get game data using the service method
-            Map<String, Object> gameData = gameService.createGameDataMap(gameId);
+            GameDataDto gameData = gameService.createGameData(gameId);
             if (gameData != null) {
                 Optional<Game> gameOpt = gameService.findById(gameId);
                 if (gameOpt.isPresent()) {
@@ -455,10 +474,77 @@ public class ChessWebSocketHandler implements WebSocketHandler, GameNotification
         }
     }
 
+    private void handleOfferDraw(User user, Map<String, Object> messageData) {
+        try {
+            Long gameId = Long.valueOf(String.valueOf(messageData.get("gameId")));
+            boolean success = gameService.offerDraw(gameId, user);
+
+            if (success) {
+                Optional<Game> gameOpt = gameService.findById(gameId);
+                if (gameOpt.isPresent()) {
+                    Game game = gameOpt.get();
+                    User opponent = game.getOpponent(user);
+                    sendToUser(opponent.getLogin(), "drawOffered", Map.of(
+                            "gameId", gameId,
+                            "offeredBy", user.getDisplayName()));
+                    sendToUser(user.getLogin(), "drawOfferSent", Map.of("gameId", gameId));
+                }
+            } else {
+                sendToUser(user.getLogin(), "error", Map.of("message", "Cannot offer draw"));
+            }
+        } catch (Exception e) {
+            logger.error("Error handling draw offer: ", e);
+            sendToUser(user.getLogin(), "error", Map.of("message", "Failed to offer draw"));
+        }
+    }
+
+    private void handleAcceptDraw(User user, Map<String, Object> messageData) {
+        try {
+            Long gameId = Long.valueOf(String.valueOf(messageData.get("gameId")));
+            boolean success = gameService.acceptDraw(gameId, user);
+
+            if (success) {
+                Optional<Game> gameOpt = gameService.findById(gameId);
+                if (gameOpt.isPresent()) {
+                    Game game = gameOpt.get();
+                    notifyGameEnded(game);
+                }
+            } else {
+                sendToUser(user.getLogin(), "error", Map.of("message", "No pending draw offer to accept"));
+            }
+        } catch (Exception e) {
+            logger.error("Error handling accept draw: ", e);
+            sendToUser(user.getLogin(), "error", Map.of("message", "Failed to accept draw"));
+        }
+    }
+
+    private void handleDeclineDraw(User user, Map<String, Object> messageData) {
+        try {
+            Long gameId = Long.valueOf(String.valueOf(messageData.get("gameId")));
+            boolean success = gameService.declineDraw(gameId, user);
+
+            if (success) {
+                Optional<Game> gameOpt = gameService.findById(gameId);
+                if (gameOpt.isPresent()) {
+                    Game game = gameOpt.get();
+                    User opponent = game.getOpponent(user);
+                    sendToUser(opponent.getLogin(), "drawDeclined", Map.of(
+                            "gameId", gameId,
+                            "declinedBy", user.getDisplayName()));
+                }
+            } else {
+                sendToUser(user.getLogin(), "error", Map.of("message", "No pending draw offer to decline"));
+            }
+        } catch (Exception e) {
+            logger.error("Error handling decline draw: ", e);
+            sendToUser(user.getLogin(), "error", Map.of("message", "Failed to decline draw"));
+        }
+    }
+
     @Override
     public void notifyGameFound(User user1, User user2, Game game) {
         gameTimerService.scheduleTimeout(game);
-        Map<String, Object> gameData = gameService.createGameDataMap(game);
+        GameDataDto gameData = gameService.createGameData(game);
 
         if (gameData != null) {
             sendToUser(user1.getLogin(), "gameStarted", gameData);
@@ -480,5 +566,24 @@ public class ChessWebSocketHandler implements WebSocketHandler, GameNotification
 
         sendToUser(game.getWhitePlayer().getLogin(), "gameEnded", resultData);
         sendToUser(game.getBlackPlayer().getLogin(), "gameEnded", resultData);
+    }
+
+    /**
+     * Broadcasts online/offline presence notifications to all connected friends.
+     */
+    private void broadcastFriendPresence(User user, boolean isOnline) {
+        try {
+            List<String> onlineFriendLogins = friendService.getOnlineFriendLogins(user);
+            String messageType = isOnline ? "friendOnline" : "friendOffline";
+            Map<String, Object> data = Map.of(
+                    "login", user.getLogin(),
+                    "displayName", user.getDisplayName());
+
+            for (String friendLogin : onlineFriendLogins) {
+                sendToUser(friendLogin, messageType, data);
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to broadcast friend presence for {}: {}", user.getLogin(), e.getMessage());
+        }
     }
 }

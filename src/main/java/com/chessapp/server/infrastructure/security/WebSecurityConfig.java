@@ -36,11 +36,16 @@ public class WebSecurityConfig {
                                                 .requestMatchers(
                                                                 "/api/auth/**",
                                                                 "/api/users/**",
+                                                                "/api/friends/**",
+                                                                "/api/games/**",
+                                                                "/api/leaderboard/**",
+                                                                "/api/search/**",
                                                                 "/ws/**",
                                                                 "/h2-console/**",
                                                                 "/v3/api-docs/**",
                                                                 "/swagger-ui/**",
                                                                 "/swagger-ui.html",
+                                                                "/actuator/**",
                                                                 "/error",
                                                                 "/error/**")
                                                 .permitAll()

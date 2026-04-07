@@ -4,6 +4,7 @@ public enum GameResult {
         WHITE_WIN,
         BLACK_WIN,
         DRAW,
+        DRAW_BY_AGREEMENT,
         WHITE_WIN_TIMEOUT,
         BLACK_WIN_TIMEOUT,
         WHITE_WIN_RESIGNATION,

@@ -2,7 +2,8 @@ package com.chessapp.server.application.service;
 
 import com.chessapp.server.domain.model.*;
 import com.chessapp.server.domain.enums.*;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import jakarta.transaction.Transactional;
 
@@ -13,10 +14,14 @@ import java.util.concurrent.ConcurrentMap;
 @Service
 public class MatchmakingServiceImpl implements MatchmakingService {
 
-    @Autowired
-    private GameService gameService;
+    private static final Logger logger = LoggerFactory.getLogger(MatchmakingServiceImpl.class);
 
+    private final GameService gameService;
     private GameNotificationService notifier;
+
+    public MatchmakingServiceImpl(GameService gameService) {
+        this.gameService = gameService;
+    }
 
     public void setNotifier(GameNotificationService notifier) {
         this.notifier = notifier;
@@ -28,8 +33,7 @@ public class MatchmakingServiceImpl implements MatchmakingService {
     @Transactional
     public void enterSearchMode(User user, TimeControl timeControl) {
         Optional<Game> activeGame = gameService.findActiveGameByPlayer(user);
-        System.out.println(
-                "[MM] User " + user.getLogin() + " entering search. Active game present? " + activeGame.isPresent());
+        logger.info("[MM] User {} entering search. Active game present? {}", user.getLogin(), activeGame.isPresent());
 
         // if (activeGame.isPresent()) {
         // // Check if the game is actually in progress
@@ -68,7 +72,7 @@ public class MatchmakingServiceImpl implements MatchmakingService {
             if (Math.abs(userRating - otherRating) <= 200) {
                 // Create the game
                 Game game = gameService.createGame(user, other.getUser(), timeControl);
-                System.out.println("After game creation: " + game.getId() + " - " + game.getState());
+                logger.info("After game creation: {} - {}", game.getId(), game.getState());
 
                 // Remove both users from search
                 searchingUsers.remove(user.getLogin());

@@ -3,6 +3,8 @@ package com.chessapp.server.presentation.rest;
 import com.chessapp.server.domain.model.User;
 import com.chessapp.server.infrastructure.security.JwtUtils;
 import com.chessapp.server.application.service.UserService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -18,6 +20,8 @@ import java.util.Optional;
 @CrossOrigin
 public class UserController {
 
+    private static final Logger logger = LoggerFactory.getLogger(UserController.class);
+
     @Autowired
     private UserService userService;
 
@@ -30,13 +34,16 @@ public class UserController {
             return ResponseEntity.status(401).body(Map.of("error", "Missing or invalid Authorization header"));
         }
         String username = getUsernameFromToken(authHeader);
+        if (username == null) {
+            return ResponseEntity.status(401).body(Map.of("error", "Invalid token"));
+        }
 
         Optional<User> userOpt = userService.findByLogin(username);
 
         if (userOpt.isPresent()) {
             return ResponseEntity.ok(createUserResponse(userOpt.get()));
         } else {
-            System.out.println(username + " " + authHeader);
+            logger.warn("User not found for profile request: {} auth: {}", username, authHeader);
             return ResponseEntity.notFound().build();
         }
     }
@@ -45,6 +52,9 @@ public class UserController {
     public ResponseEntity<?> updateProfile(@RequestHeader("Authorization") String token,
             @RequestBody UpdateProfileRequest request) {
         String username = getUsernameFromToken(token);
+        if (username == null) {
+            return ResponseEntity.status(401).body(Map.of("error", "Invalid token"));
+        }
         Optional<User> userOpt = userService.findByLogin(username);
 
         if (userOpt.isPresent()) {
@@ -61,6 +71,9 @@ public class UserController {
     @GetMapping("/online")
     public ResponseEntity<?> getOnlineUsers(@RequestHeader("Authorization") String authHeader) {
         String username = getUsernameFromToken(authHeader);
+        if (username == null) {
+            return ResponseEntity.status(401).body(Map.of("error", "Invalid token"));
+        }
         Optional<User> userOpt = userService.findByLogin(username);
 
         if (userOpt.isPresent()) {
@@ -72,7 +85,14 @@ public class UserController {
     }
 
     private String getUsernameFromToken(String token) {
-        return jwtUtils.getUserNameFromJwtToken(token.substring(7)); // Remove "Bearer " prefix
+        try {
+            if (token != null && token.startsWith("Bearer ")) {
+                return jwtUtils.getUserNameFromJwtToken(token.substring(7)); // Remove "Bearer " prefix
+            }
+            return jwtUtils.getUserNameFromJwtToken(token);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private UserResponseDto createUserResponse(User user) {
